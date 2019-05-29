@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import zipfile
+import subprocess
+import getpass
+
+AIS_DIR = "ais"
+API_URL = "https://pytron.tforgione.fr/upload-target/"
+
+class Ai:
+    def __init__(self, path):
+        self.path = path
+        self.name = path.split('/')[-1]
+
+def print_green(param):
+    print("\033[32;1m" + str(param) + "\033[0m", file=sys.stderr)
+
+def print_red(param):
+    print("\033[31;1m" + str(param) + "\033[0m", file=sys.stderr)
+
+def print_yellow(param):
+    print("\033[33;1m" + str(param) + "\033[0m", file=sys.stderr)
+
+def find_ais(path):
+    return [Ai(x) for x in os.listdir(path) if not x.startswith('__') and not x.startswith('.')]
+
+def upload_ai(ai):
+    return_code = 0
+    print_yellow("Please enter the password corresponding to " + ai.name);
+    password = getpass.getpass()
+
+    print_yellow("Zipping the AI...")
+    zip = zipfile.ZipFile('.archive.zip', mode = 'w')
+    try:
+        for file in os.listdir(AIS_DIR + "/" + ai.path):
+            zip.write(AIS_DIR + "/" + ai.path + "/" + file, arcname=file)
+    finally:
+        zip.close()
+
+    print_yellow("Uploading the AI...")
+
+    curl = subprocess.Popen([
+        'curl', '-X', 'POST',
+        '-F', 'archive=@.archive.zip',
+        '-F', 'name=' + ai.name,
+        '-F', 'password=' + password,
+        API_URL],
+        stderr = subprocess.PIPE,
+        stdout = subprocess.PIPE)
+
+    code = curl.wait()
+
+    if code != 0:
+        return_code = 1
+        response = "curl request failed"
+    else:
+        response = curl.stdout.read().decode()
+
+    if response == 'Success':
+        print_green("Upload finished!")
+    else:
+        print_red("Upload failed: " + str(response).lower())
+        return_code = 1
+
+    os.remove(".archive.zip")
+    sys.exit(return_code)
+
+def main():
+    print_green("Welcome to the pytron uploader!")
+    ais = find_ais(AIS_DIR)
+
+    if len(ais) == 0:
+        print_red("No AI have been found. Please put your AIs as directories inside the ais directory")
+        sys.exit(1)
+
+    elif len(ais) == 1:
+        print_yellow("Only one AI has been found: " + ais[0].name)
+        print_yellow("Would you like to upload it ? [Y/n]")
+
+        response = input().lower()
+        if response == '' or response == 'y' or response == 'yes':
+            upload_ai(ais[0])
+
+    else:
+        print_yellow("Many AIs have been found, which one would you like to upload ?")
+
+        for (id, ai) in enumerate(ais):
+            print("\033[34;1m[" + str(id + 1) + "]\033[0m \033[33m" + ai.name + "\033[0m", file=sys.stderr)
+
+        response = input()
+
+        try:
+            response = int(response) - 1
+            if response < 0 or response >= len(ais):
+                raise ValueError
+        except ValueError:
+            print_red('I was expecting an integer in [1,' + str(len(ais)) + ']')
+            sys.exit(1)
+
+        upload_ai(ais[response])
+
+
+
+if __name__ == '__main__':
+    main()
+
