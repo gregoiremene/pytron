@@ -70,6 +70,8 @@ def main():
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
 
     games = 0  # total number of games played
+    moyenne_duration = 0
+    moyenne_loss = 0
 
     while 1:
 
@@ -139,8 +141,18 @@ def main():
         games = games + 1
         torch.save(net.state_dict(), 'ais/' + ai_name + '/ai.bak')
 
-        if (games%3000 == 0):
-            print('[%5d] loss: %.3f, duration: %3.3f' % (games, loss, game_duration))
+        nombre_echant = 1500
+        if (games == 1):
+            moyenne_duration = game_duration
+            moyenne_loss = loss
+            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss, moyenne_duration))
+        elif (games%nombre_echant == 0):
+            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss//nombre_echant, moyenne_duration//nombre_echant))
+            moyenne_duration = 0
+            moyenne_loss = 0
+        else:
+            moyenne_duration = moyenne_duration + game_duration
+            moyenne_loss = moyenne_loss + loss
 
 
 if __name__ == '__main__':

@@ -70,13 +70,15 @@ def main():
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
 
     games = 0  # total number of games played
+    moyenne_duration = 0
+    moyenne_loss = 0
 
-    max_minibatch = 2000
+    max_minibatch = 5000
 
     # Data structures used for learning
-        states = []  # maps of the game
-        actions = []  # actions taken
-        rewards = []  # immediate rewards obtained
+    states = []  # maps of the game
+    actions = []  # actions taken
+    rewards = []  # immediate rewards obtained
 
     while 1:
 
@@ -94,26 +96,44 @@ def main():
             for step in range(0, game_duration):
                 # Get player action at this step
                 if p == 1:
-                    actions[games%max_minibatch] = game.history[step].player_one_direction.value - 1
+                    if len(actions) < max_minibatch:
+                        actions.append(game.history[step].player_one_direction.value - 1)
+                    else:
+                        actions[games%max_minibatch] = game.history[step].player_one_direction.value - 1
                     #actions.append(game.history[step].player_one_direction.value - 1)
                 elif p == 2:
-                    actions[games%max_minibatch] = game.history[step].player_two_direction.value - 1
+                    if len(actions) < max_minibatch:
+                        actions.append(game.history[step].player_two_direction.value - 1)
+                    else:
+                        actions[games%max_minibatch] = game.history[step].player_two_direction.value - 1
                     #actions.append(game.history[step].player_two_direction.value - 1)
 
                 # Get game state at this step
-                states[games%max_minibatch] = game.history[step].map.state_for_player(p)
+                if len(states) < max_minibatch:
+                    states.append(game.history[step].map.state_for_player(p))
+                else:
+                    states[games%max_minibatch] = game.history[step].map.state_for_player(p)
                 #states.append(game.history[step].map.state_for_player(p))
                 
                 # Get player reward for the action taken at this step
                 # cf. Slide 6 from Reinforcement Learning class: "Classical version"
                 if step < game_duration - 1:
-                    rewards[games%max_minibatch] = 0
+                    if len(rewards) < max_minibatch:
+                        rewards.append(0)
+                    else:
+                        rewards[games%max_minibatch] = 0
                     #rewards.append(0)
                 elif game.winner == p:
-                    rewards[games%max_minibatch] = 1
+                    if len(rewards) < max_minibatch:
+                        rewards.append(1)
+                    else:
+                        rewards[games%max_minibatch] = 1
                     #rewards.append(1)
                 else:
-                    rewards[games%max_minibatch] = -1
+                    if len(rewards) < max_minibatch:
+                        rewards.append(-1)
+                    else:
+                        rewards[games%max_minibatch] = -1
                     #rewards.append(-1)
 
         inputs = np.reshape(states, (len(states), 1, width + 2, height + 2))
@@ -132,21 +152,24 @@ def main():
         #utiliser sample de random ! retenir dans une liste et prendre dans la subsec
         #que les mêmes indices pour rewards, actions, et states sinon ça sera pas 
         #coordonné
+        
         taille_subsect_minibatch = 200
+        liste_indice = range(taille_subsect_minibatch)
         subsect_minibatch = []
-        i = states.size
+        i = len(states)
         if i < taille_subsect_minibatch:
             for a in range(0, len(states)):
                 subsect_minibatch.append([states[a], actions[a], rewards[a]])
         else:
-            # randint avec % pour en prendre 200 (besoin d'un compteur?)    
-        
+            liste_alea_indice = random.sample(liste_indice, taille_subsect_minibatch)
+            for a in range(0, len(liste_alea_indice)):
+                subsect_minibatch.append([states[liste_alea_indice[a]], actions[liste_alea_indice[a]], actions[liste_alea_indice[a]]])
         #juste changer le for pour parcourir le subsec batch
-        for aux in range(0, len(actions)):
-            if abs(rewards[aux]) == 1:
-                target_q_values[aux, actions[aux]] = rewards[aux]
+        for aux in range(0, len(subsect_minibatch)):
+            if abs(subsect_minibatch[aux][2]) == 1:
+                target_q_values[aux, subsect_minibatch[aux][1]] = subsect_minibatch[aux][2]
             else:
-                target_q_values[aux, actions[aux]] = rewards[aux] + gamma * max_outputs[aux + 1]
+                target_q_values[aux, subsect_minibatch[aux][1]] = subsect_minibatch[aux][2] + gamma * max_outputs[aux + 1]
 
         # zero the parameter gradients
         net.zero_grad()
@@ -163,7 +186,18 @@ def main():
         games = games + 1
         torch.save(net.state_dict(), 'ais/' + ai_name + '/ai.bak')
 
-        print('[%5d] loss: %.3f, duration: %3.3f' % (games, loss, game_duration))
+        nombre_echant = 1500
+        if (games == 1):
+            moyenne_duration = game_duration
+            moyenne_loss = loss
+            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss, moyenne_duration))
+        elif (games%nombre_echant == 0):
+            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss//nombre_echant, moyenne_duration//nombre_echant))
+            moyenne_duration = 0
+            moyenne_loss = 0
+        else:
+            moyenne_duration = moyenne_duration + game_duration
+            moyenne_loss = moyenne_loss + loss
 
 
 if __name__ == '__main__':
