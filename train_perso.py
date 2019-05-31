@@ -58,7 +58,7 @@ def main():
 
     # Hyperparameters
     gamma = 0.9  # discount factor, used to balance between immediate and future rewards
-    learning_rate = 1e-3
+    learning_rate = 4e-3
     momentum = 0.9
 
     # Initialize Neural Network
@@ -73,7 +73,7 @@ def main():
     moyenne_duration = 0
     moyenne_loss = 0
 
-    max_minibatch = 5000
+    max_minibatch = 10000
 
     # Data structures used for learning
     states = []  # maps of the game
@@ -136,7 +136,28 @@ def main():
                         rewards[games%max_minibatch] = -1
                     #rewards.append(-1)
 
-        inputs = np.reshape(states, (len(states), 1, width + 2, height + 2))
+        #utiliser sample de random ! retenir dans une liste et prendre dans la subsec
+        #que les mêmes indices pour rewards, actions, et states sinon ça sera pas 
+        #coordonné
+        
+        taille_subsect_minibatch = 500
+        liste_indice = range(taille_subsect_minibatch)
+        subsect_minibatch = []
+        i = len(states)
+        if i < taille_subsect_minibatch:
+            for a in range(0, len(states)):
+                subsect_minibatch.append([states[a], actions[a], rewards[a]])
+        else:
+            liste_alea_indice = random.sample(liste_indice, taille_subsect_minibatch)
+            for a in range(0, len(liste_alea_indice)):
+                subsect_minibatch.append([states[liste_alea_indice[a]], actions[liste_alea_indice[a]], rewards[liste_alea_indice[a]]])
+        
+        #print('taille states : [%5d], taille subsecminibatch : [%5d]' % (len(states), len(subsect_minibatch)))
+        #construction des états pour le inputs
+        states_inputs = []
+        for c in range(0,len(subsect_minibatch)):
+            states_inputs.append(subsect_minibatch[c][0])
+        inputs = np.reshape(states_inputs, (len(subsect_minibatch), 1, width + 2, height + 2))
         inputs = torch.from_numpy(inputs).float()
 
         # Compute predicted Q-values for each step and find the maximal predicted Q-value
@@ -147,29 +168,17 @@ def main():
         target_q_values = pred_q_values.clone().detach()
 
         # Apply Bellman equation to determine the target Q_value for the action that was taken
-        
 
-        #utiliser sample de random ! retenir dans une liste et prendre dans la subsec
-        #que les mêmes indices pour rewards, actions, et states sinon ça sera pas 
-        #coordonné
-        
-        taille_subsect_minibatch = 200
-        liste_indice = range(taille_subsect_minibatch)
-        subsect_minibatch = []
-        i = len(states)
-        if i < taille_subsect_minibatch:
-            for a in range(0, len(states)):
-                subsect_minibatch.append([states[a], actions[a], rewards[a]])
-        else:
-            liste_alea_indice = random.sample(liste_indice, taille_subsect_minibatch)
-            for a in range(0, len(liste_alea_indice)):
-                subsect_minibatch.append([states[liste_alea_indice[a]], actions[liste_alea_indice[a]], actions[liste_alea_indice[a]]])
         #juste changer le for pour parcourir le subsec batch
-        for aux in range(0, len(subsect_minibatch)):
+        for aux in range(0, len(subsect_minibatch) - 1):
             if abs(subsect_minibatch[aux][2]) == 1:
                 target_q_values[aux, subsect_minibatch[aux][1]] = subsect_minibatch[aux][2]
             else:
-                target_q_values[aux, subsect_minibatch[aux][1]] = subsect_minibatch[aux][2] + gamma * max_outputs[aux + 1]
+                #print('actions[aux] : %3.3f, aux : %5d' % (actions[aux], aux))
+                rew = subsect_minibatch[aux][2]
+                maxx = max_outputs[aux + 1]
+                #target_q_values[aux, subsect_minibatch[aux][1]] = subsect_minibatch[aux][2] + gamma * max_outputs[aux + 1]
+                target_q_values[aux, subsect_minibatch[aux][1]] = rew + gamma * maxx
 
         # zero the parameter gradients
         net.zero_grad()
@@ -186,13 +195,13 @@ def main():
         games = games + 1
         torch.save(net.state_dict(), 'ais/' + ai_name + '/ai.bak')
 
-        nombre_echant = 1500
+        nombre_echant = 1000
         if (games == 1):
             moyenne_duration = game_duration
             moyenne_loss = loss
-            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss, moyenne_duration))
+            #print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss, moyenne_duration))
         elif (games%nombre_echant == 0):
-            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss//nombre_echant, moyenne_duration//nombre_echant))
+            print('[%5d] average loss: %.3f, average duration: %3.3f' % (games, moyenne_loss/nombre_echant, moyenne_duration//nombre_echant))
             moyenne_duration = 0
             moyenne_loss = 0
         else:

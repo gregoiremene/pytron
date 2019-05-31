@@ -58,7 +58,7 @@ def main():
 
     # Hyperparameters
     gamma = 0.9  # discount factor, used to balance between immediate and future rewards
-    learning_rate = 1e-3
+    learning_rate = 4e-3
     momentum = 0.9
 
     # Initialize Neural Network
